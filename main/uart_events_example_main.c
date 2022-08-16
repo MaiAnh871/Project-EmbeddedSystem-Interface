@@ -49,26 +49,73 @@ char recv_buf[512];
 
 static void uart_event_task(void *pvParameters)
 {
+    /*
+     * Event structure used in UART event queue
+     */
     uart_event_t event;
+
     size_t buffered_size;
     uint8_t* dtmp = (uint8_t*) malloc(RD_BUF_SIZE);
+
     for(;;) {
         //Waiting for UART event.
 
+        /**
+         * @brief Receive an item from a queue. The item is received by copy so a buffer of adequate size 
+         * must be provided. The number of bytes copied into the buffer was defined when the queue was created.
+         * Successfully received items are removed from the queue.
+         * 
+         * @param xQueue The handle to the queue from which the item is to be received.
+         * @param pvBuffer Pointer to the buffer into which the received item will be copied.
+         * @param xTicksToWait The maximum amount of time the task should block waiting for an item to receive 
+         * should the queue be empty at the time of the call.
+         */
         if(xQueueReceive(uart0_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
+
+            /**
+             * @brief erases the data in the n bytes of the memory
+             * starting at the location pointed to by s, by writing zeros (bytes
+             * containing '\0') to that area.
+             * 
+             */
             bzero(dtmp, RD_BUF_SIZE);
+
             switch(event.type) {
                 case UART_DATA:
+
+                    /**
+                     * @brief UART read bytes from UART buffer.
+                     * 
+                     * @param uart_num UART port number, the max port number is (UART_NUM_MAX -1)
+                     * @param buf pointer to the buffer
+                     * @param length data length
+                     * @param ticks_to_wait – sTimeout, count in RTOS ticks
+                     * 
+                     * @return (-1) Error/ OTHERS (>=0) The number of bytes read from UART FIFO
+                     */
                     uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY);
+
+                    /**
+                     * @brief Send data to the UART port from a given buffer and length
+                     * 
+                     * @param uart_num UART port number, the max port number is (UART_NUM_MAX -1)
+                     * @param src data buffer address
+                     * @param size data length to send
+                     * 
+                     * @return (-1) Parameter error/ OTHERS (>=0) The number of bytes pushed to the TX FIFO
+                     */
                     uart_write_bytes(EX_UART_NUM, (const char*) dtmp, event.size);
                     //printf("<--Send Data:\n");
+
                     printf("\n\n\nReceiver Data: ");
                     printf("%s\n\n",(const char*)dtmp);
                     //printf("<--Receiver Data:\n");
+
                     const struct addrinfo hints = {
                         .ai_family = AF_INET,
                         .ai_socktype = SOCK_STREAM,
                     };
+
                 struct addrinfo *res;
                 struct in_addr *addr;
                 int s, r;
@@ -137,6 +184,7 @@ static void uart_event_task(void *pvParameters)
                         close(s);
                         break;
                 //Event of HW FIFO overflow detected
+
                 case UART_FIFO_OVF:
                     ESP_LOGI(TAG, "hw fifo overflow");
                     // If fifo overflow happened, you should consider adding flow control for your application.
@@ -146,6 +194,7 @@ static void uart_event_task(void *pvParameters)
                     xQueueReset(uart0_queue);
                     break;
                 //Event of UART ring buffer full
+
                 case UART_BUFFER_FULL:
                     ESP_LOGI(TAG, "ring buffer full");
                     // If buffer full happened, you should consider encreasing your buffer size
@@ -154,18 +203,22 @@ static void uart_event_task(void *pvParameters)
                     xQueueReset(uart0_queue);
                     break;
                 //Event of UART RX break detected
+
                 case UART_BREAK:
                     ESP_LOGI(TAG, "uart rx break");
                     break;
                 //Event of UART parity check error
+
                 case UART_PARITY_ERR:
                     ESP_LOGI(TAG, "uart parity error");
                     break;
                 //Event of UART frame error
+
                 case UART_FRAME_ERR:
                     ESP_LOGI(TAG, "uart frame error");
                     break;
                 //UART_PATTERN_DET
+
                 case UART_PATTERN_DET:
                     uart_get_buffered_data_len(EX_UART_NUM, &buffered_size);
                     int pos = uart_pattern_pop_pos(EX_UART_NUM);
@@ -214,7 +267,7 @@ void app_main(void)
     //Set UART pins (using UART0 default pins ie no changes.)
     uart_set_pin(EX_UART_NUM, Tx_GPIO, Rx_GPIO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
-    ESP_ERROR_CHECK( nvs_flash_init() );
+    ESP_ERROR_CHECK(nvs_flash_init() );
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(example_connect());
